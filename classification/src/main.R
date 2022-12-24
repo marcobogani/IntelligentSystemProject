@@ -20,18 +20,24 @@
 ## ---------------------------
 
 ## ---------------------------
-## this is needed on some PCs to increase memory allowance, but has no impact on macs.
+## this is needed on some PCs to increase memory allowance,
+## but has no impact on macs.
 # memory.limit(30000000)
 
 ## ---------------------------
 
 ## load up the packages we will need:  (uncomment as required)
 
+library(InformationValue)
 library(scatterplot3d)
+library(rpart.plot)
 library(corrplot)
 library(ggplot2)
 library(GGally)
+library(rpart)
 library(dplyr)
+library(caret)
+library(ISLR)
 library(rgl)
 
 ## ---------------------------
@@ -56,14 +62,14 @@ plot_3d <- FALSE
 
 df <- read.table("data/raw/data.csv", header = T, sep = ",")
 
-# Feature + dependent variable (diagnosis)
-df.data <- df[, -1]
-# Only features (indipendent variables)
+df$diagnosis <- as.factor(df$diagnosis)
+df.data <- df[,-1]
 df.features <- df[, c(3:32)]
 
 if (plot_data) {
   boxplotF("Features", df.features)
 }
+
 
 # Data analisys ========================
 
@@ -75,7 +81,6 @@ if (plot_data) {
     mutate(perc = `n` / sum(`n`)) %>%
     arrange(perc) %>%
     mutate(labels = scales::percent(perc))
-  
   
   show(
     ggplot(analisys, aes(
@@ -129,68 +134,134 @@ if (plot_data) {
 
 
 # Clean data ===========================
+
 if (clean_data) {
   for (i in c("area_worst", "area_mean", "area_se", "perimeter_worst")) {
-    df.features = remove_outliers(df.features, i)
+    df.data = remove_outliers(df.data, i)
   }
-  boxplotF("No Outliers", df.features)
+  boxplotF("No Outliers", df.data[,-1])
 }
 
 
 # Plot corrplot ========================
 # Correlation between features
-corrplot(
-  title = "Features correlation",
-  cor(df.features),
-  diag = FALSE,
-  method = "color",
-  order = "FPC",
-  tl.srt = 90,
-  tl.cex = 0.6,
-)
+if (plot_data) {
+  corrplot(
+    title = "Features correlation",
+    cor(df.features),
+    diag = FALSE,
+    method = "square",
+    order = "FPC",
+    tl.srt = 90,
+    tl.cex = 0.6,
+  )
+}
+
+
+# Data set split ========================
+
+sample <-
+  sample(c(TRUE, FALSE),
+         nrow(df.data),
+         replace = TRUE,
+         prob = c(0.7, 0.3))
+train_set <- df.data[sample,]
+test_set <- df.data[!sample,]
 
 
 # Feature selection =====================
 
-# PC weight
-df.pca <- prcomp(df.features, scale = TRUE, center = TRUE)
+pr_comp <- prcomp(train_set[, -1], scale = TRUE, center = TRUE)
 
+std_dev <- pr_comp$sdev
+pr_var <- std_dev ^ 2
+prop_varex <- pr_var / sum(pr_var)
+sum(prop_varex[1:10])
+# 10 Principal Components explain about 95.4 % of total variance.
+# So by using PCA, the dimensions are reduces from 30 to 10.
+
+
+# Plot results --------------------------
 if (plot_data) {
   ## Corr plot
-  ggcorr(cbind(df.features, df.pca$x[,c(1:10)]), label = TRUE, cex = 2.5)
+  ggcorr(cbind(train_set[, -1], pr_comp$x[, c(1:10)]),
+         label = TRUE,
+         cex = 2.5)
   
   ## Scree plot
-  plot(df.pca, type = "lines", main = "Scree plot (PCA-prcomp)")
+  plot(pr_comp, type = "lines", main = "Scree plot (PCA-prcomp)")
   title(xlab = "PC")
+  
+  ## Cumulative Proportion of Variance Explained
+  plot(cumsum(prop_varex),
+       xlab = "Principal Component",
+       ylab = "Cumulative Proportion of Variance Explained",
+       type = "b")
+  abline(h = sum(prop_varex[1:10]),
+         col = 'red',
+         v = 10)
   
   ## Scatter plot (PC1, PC2)
   show(ggplot(
-    as.data.frame(df.pca$x),
+    as.data.frame(pr_comp$x),
     aes(
       x = PC1,
       y = PC2,
-      col = df.data$diagnosis
+      col = train_set$diagnosis
     )
   ) + geom_point(alpha = 0.5))
   
   ## Biplot (PC1, PC2)
-  biplot(df.pca,
+  biplot(pr_comp,
          cex = c(.7, .7),
          col = c("gray", "red"))
   
-  ## 3D scatter plot
-  scatterplot3d(df.pca$x[, 1:3], pch = 16,
-                color = as.numeric(as.factor(df$diagnosis)))
+  ## 3D scatter plot (PC1, PC2, PC3)
+  scatterplot3d(pr_comp$x[, 1:3], pch = 16,
+                color = as.numeric(train_set$diagnosis))
 }
 
 if (plot_3d) {
   plot3d(
-    df.pca$x[, 1:3],
-    col = as.integer(as.factor(df$diagnosis)),
+    pr_comp$x[, 1:3],
+    col = as.integer(train_set$diagnosis),
     type = "s",
     size = 0.5
   )
   play3d(spin3d(axis = c(1, 1, 1), rpm = 5), duration = 10)
 }
+
+
+# Model Building ========================
+
+# New training set with 10 principal components
+train_set.pca <- data.frame(diagnosis = train_set$diagnosis, pr_comp$x) [,1:11]
+
+model_tree <-
+  rpart(diagnosis ~ .,
+        data = train_set.pca,
+        method = "anova")
+
+#transform test into PCA
+test_set.pca <- predict(pr_comp, newdata = test_set)
+test_set.pca <- as.data.frame(test_set.pca)[,1:11]
+
+pred_mt <- predict(model_tree, test_set.pca)
+confusionMatrix(pred_mt, test_set$diagnosis, positive = "M")
+
+
+#Plotting best size of tree -> on minimum error
+plotcp(model_tree)
+minimum.error <- which.min(model_tree$cptable[, "xerror"])
+optimal.complexity <- model_tree$cptable[minimum.error, "CP"]
+points(minimum.error, model_tree$cptable[minimum.error, "xerror"],
+       col = "red", pch = 19)
+
+model_prune <- prune(model_tree, cp = optimal.complexity)
+
+rpart.plot(model_tree, type=1, extra=100, box.palette ="-RdYlGn", branch.lty = 2)
+rpart.plot(model_prune, type=1, extra=100, box.palette ="-RdYlGn", branch.lty = 2)
+
+
 
 
