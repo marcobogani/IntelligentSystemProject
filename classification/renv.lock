@@ -38,17 +38,6 @@
       "Hash": "bc04429c6428a790926f7053a6fa4815",
       "Requirements": []
     },
-    "InformationValue": {
-      "Package": "InformationValue",
-      "Version": "1.2.3",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "eba8ba8b719c15e836a5938dd0b34793",
-      "Requirements": [
-        "data.table",
-        "ggplot2"
-      ]
-    },
     "KernSmooth": {
       "Package": "KernSmooth",
       "Version": "2.23-20",

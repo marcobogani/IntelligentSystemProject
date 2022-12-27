@@ -28,7 +28,6 @@
 
 ## load up the packages we will need:  (uncomment as required)
 
-library(InformationValue)
 library(scatterplot3d)
 library(rpart.plot)
 library(corrplot)
@@ -38,6 +37,7 @@ library(rpart)
 library(dplyr)
 library(caret)
 library(ISLR)
+library(pROC)
 library(rgl)
 
 ## ---------------------------
@@ -51,9 +51,10 @@ source("src/outliers.R")
 
 # Set variables ========================
 
-set.seed(10)
+# set.seed(10)
+set.seed(451)
 clean_data <- FALSE
-plot_data <- TRUE
+plot_data <- FALSE
 plot_heavy <- FALSE
 plot_3d <- FALSE
 
@@ -63,7 +64,7 @@ plot_3d <- FALSE
 df <- read.table("data/raw/data.csv", header = T, sep = ",")
 
 df$diagnosis <- as.factor(df$diagnosis)
-df.data <- df[,-1]
+df.data <- df[, -1]
 df.features <- df[, c(3:32)]
 
 if (plot_data) {
@@ -139,7 +140,7 @@ if (clean_data) {
   for (i in c("area_worst", "area_mean", "area_se", "perimeter_worst")) {
     df.data = remove_outliers(df.data, i)
   }
-  boxplotF("No Outliers", df.data[,-1])
+  boxplotF("No Outliers", df.data[, -1])
 }
 
 
@@ -148,7 +149,7 @@ if (clean_data) {
 if (plot_data) {
   corrplot(
     title = "Features correlation",
-    cor(df.features),
+    cor(df.data[,-1]),
     diag = FALSE,
     method = "square",
     order = "FPC",
@@ -164,14 +165,14 @@ sample <-
   sample(c(TRUE, FALSE),
          nrow(df.data),
          replace = TRUE,
-         prob = c(0.7, 0.3))
-train_set <- df.data[sample,]
-test_set <- df.data[!sample,]
+         prob = c(0.8, 0.2))
+train_set <- df.data[sample, ]
+test_set <- df.data[!sample, ]
 
 
 # Feature selection =====================
 
-pr_comp <- prcomp(train_set[, -1], scale = TRUE, center = TRUE)
+pr_comp <- prcomp(train_set[,-1], scale = TRUE, center = TRUE)
 
 std_dev <- pr_comp$sdev
 pr_var <- std_dev ^ 2
@@ -184,7 +185,7 @@ sum(prop_varex[1:10])
 # Plot results --------------------------
 if (plot_data) {
   ## Corr plot
-  ggcorr(cbind(train_set[, -1], pr_comp$x[, c(1:10)]),
+  ggcorr(cbind(train_set[,-1], pr_comp$x[, c(1:10)]),
          label = TRUE,
          cex = 2.5)
   
@@ -217,7 +218,8 @@ if (plot_data) {
          col = c("gray", "red"))
   
   ## 3D scatter plot (PC1, PC2, PC3)
-  scatterplot3d(pr_comp$x[, 1:3], pch = 16,
+  scatterplot3d(pr_comp$x[, 1:3],
+                pch = 16,
                 color = as.numeric(train_set$diagnosis))
 }
 
@@ -235,33 +237,80 @@ if (plot_3d) {
 # Model Building ========================
 
 # New training set with 10 principal components
-train_set.pca <- data.frame(diagnosis = train_set$diagnosis, pr_comp$x) [,1:11]
+train_set$pca <-
+  data.frame(diagnosis = train_set$diagnosis, pr_comp$x) [, 1:11]
 
 model_tree <-
   rpart(diagnosis ~ .,
-        data = train_set.pca,
-        method = "anova")
-
-#transform test into PCA
-test_set.pca <- predict(pr_comp, newdata = test_set)
-test_set.pca <- as.data.frame(test_set.pca)[,1:11]
-
-pred_mt <- predict(model_tree, test_set.pca)
-confusionMatrix(pred_mt, test_set$diagnosis, positive = "M")
+        data = train_set$pca,
+        method = "class")
 
 
 #Plotting best size of tree -> on minimum error
 plotcp(model_tree)
 minimum.error <- which.min(model_tree$cptable[, "xerror"])
 optimal.complexity <- model_tree$cptable[minimum.error, "CP"]
-points(minimum.error, model_tree$cptable[minimum.error, "xerror"],
-       col = "red", pch = 19)
+points(minimum.error,
+       model_tree$cptable[minimum.error, "xerror"],
+       col = "red",
+       pch = 19)
 
 model_prune <- prune(model_tree, cp = optimal.complexity)
 
-rpart.plot(model_tree, type=1, extra=100, box.palette ="-RdYlGn", branch.lty = 2)
-rpart.plot(model_prune, type=1, extra=100, box.palette ="-RdYlGn", branch.lty = 2)
+train_set$pred <-
+  predict(model_prune, newdata = train_set$pca, type = "class")
+
+show(
+  confusionMatrix(
+    data = train_set$pred,
+    reference = train_set$pca$diagnosis,
+    positive = "M"
+  )
+)
+
+rpart.plot(
+  model_tree,
+  type = 1,
+  extra = 100,
+  box.palette = "-RdYlGn",
+  branch.lty = 2
+)
+rpart.plot(
+  model_prune,
+  type = 1,
+  extra = 100,
+  box.palette = "-RdYlGn",
+  branch.lty = 2
+)
 
 
+# Test ==================================
+test_prcomp <- prcomp(test_set[,-1], scale = TRUE, center = TRUE)
+test_set$pca <-
+  data.frame(diagnosis = test_set$diagnosis, test_prcomp$x) [, 1:11]
 
+
+test_set$pred <-
+  predict(model_prune, newdata = test_set$pca, type = "class")
+
+show(
+  confusionMatrix(
+    data = test_set$pred,
+    reference = test_set$pca$diagnosis,
+    positive = "M"
+  )
+)
+
+probs <-
+  predict(model_prune, newdata = test_set$pca, type = "prob")[, 1]
+
+roc(
+  response = (test_set$pca$diagnosis == "M"),
+  predictor = probs,
+  auc = TRUE,
+  ci = TRUE,
+  plot = TRUE,
+  main = "Curva ROC",
+  legacy.axes = TRUE
+)
 
