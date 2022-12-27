@@ -54,7 +54,7 @@ source("src/outliers.R")
 # set.seed(10)
 set.seed(451)
 clean_data <- FALSE
-plot_data <- FALSE
+plot_data <- TRUE
 plot_heavy <- FALSE
 plot_3d <- FALSE
 
@@ -181,13 +181,19 @@ sum(prop_varex[1:10])
 # 10 Principal Components explain about 95.4 % of total variance.
 # So by using PCA, the dimensions are reduces from 30 to 10.
 
+# New training set with 10 principal components
+train_set$pca <-
+  data.frame(diagnosis = train_set$diagnosis, pr_comp$x) [, 1:11]
+
 
 # Plot results --------------------------
 if (plot_data) {
   ## Corr plot
-  ggcorr(cbind(train_set[,-1], pr_comp$x[, c(1:10)]),
-         label = TRUE,
-         cex = 2.5)
+  show(ggcorr(
+    cbind(train_set[,-1], pr_comp$x[, c(1:10)]),
+    label = TRUE,
+    cex = 2.5
+  ))
   
   ## Scree plot
   plot(pr_comp, type = "lines", main = "Scree plot (PCA-prcomp)")
@@ -234,11 +240,7 @@ if (plot_3d) {
 }
 
 
-# Model Building ========================
-
-# New training set with 10 principal components
-train_set$pca <-
-  data.frame(diagnosis = train_set$diagnosis, pr_comp$x) [, 1:11]
+# Classification Tree ===================
 
 model_tree <-
   rpart(diagnosis ~ .,
@@ -247,40 +249,45 @@ model_tree <-
 
 
 #Plotting best size of tree -> on minimum error
-plotcp(model_tree)
 minimum.error <- which.min(model_tree$cptable[, "xerror"])
 optimal.complexity <- model_tree$cptable[minimum.error, "CP"]
-points(minimum.error,
-       model_tree$cptable[minimum.error, "xerror"],
-       col = "red",
-       pch = 19)
+if (plot_data) {
+  plotcp(model_tree)
+  points(minimum.error,
+         model_tree$cptable[minimum.error, "xerror"],
+         col = "red",
+         pch = 19)
+}
 
 model_prune <- prune(model_tree, cp = optimal.complexity)
+
+if (plot_data) {
+  show(rpart.plot(
+    model_tree,
+    type = 1,
+    extra = 100,
+    box.palette = "-RdYlGn",
+    branch.lty = 2
+  ))
+  show(rpart.plot(
+    model_prune,
+    type = 1,
+    extra = 100,
+    box.palette = "-RdYlGn",
+    branch.lty = 2
+  ))
+}
 
 train_set$pred <-
   predict(model_prune, newdata = train_set$pca, type = "class")
 
+print("=== CLASSIFICATION TREE (train) ===")
 show(
   confusionMatrix(
     data = train_set$pred,
     reference = train_set$pca$diagnosis,
     positive = "M"
   )
-)
-
-rpart.plot(
-  model_tree,
-  type = 1,
-  extra = 100,
-  box.palette = "-RdYlGn",
-  branch.lty = 2
-)
-rpart.plot(
-  model_prune,
-  type = 1,
-  extra = 100,
-  box.palette = "-RdYlGn",
-  branch.lty = 2
 )
 
 
@@ -293,6 +300,7 @@ test_set$pca <-
 test_set$pred <-
   predict(model_prune, newdata = test_set$pca, type = "class")
 
+print("=== CLASSIFICATION TREE (test) ===")
 show(
   confusionMatrix(
     data = test_set$pred,
@@ -304,13 +312,17 @@ show(
 probs <-
   predict(model_prune, newdata = test_set$pca, type = "prob")[, 1]
 
-roc(
-  response = (test_set$pca$diagnosis == "M"),
-  predictor = probs,
-  auc = TRUE,
-  ci = TRUE,
-  plot = TRUE,
-  main = "Curva ROC",
-  legacy.axes = TRUE
-)
-
+# ROC
+if (plot_data) {
+  show(
+    roc(
+      response = (test_set$pca$diagnosis == "M"),
+      predictor = probs,
+      auc = TRUE,
+      ci = TRUE,
+      plot = TRUE,
+      main = "Curva ROC",
+      legacy.axes = TRUE
+    )
+  )
+}
