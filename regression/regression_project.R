@@ -5,10 +5,12 @@
   library(mlbench)
   library(caret)
   library(glmnet)
-  source("outliers.R")
-  source("reg_perf.R")
+  library(randomForest)
+  library(MASS)
+  source("regression/outliers.R")
+  source("regression/reg_perf.R")
   #source("plot_config.R")
-  car <- read.csv('dataset/data.csv')
+  car <- read.csv('regression/dataset/data.csv')
   #Dataset cleaning
   for(i in 1:2)
     car <- remove_outliers(car, "km_driven")
@@ -140,6 +142,22 @@
   rsquare_lrm <- R2(pred_lr, test$selling_price)
   rmse_orm
   rsquare_lrm
+  
+  plot(m2_lr)
+  plot(test$selling_price,pred_lr, main="Scatterplot of LRM model", col = c("red","blue"), 
+       xlab = "Actual Selling Price", ylab = "Predicted Selling Price")
+  
+  #Random forest
+  m2_rf <- randomForest(selling_price~.,data = train)
+  plot(m2_rf, main="Error rate of random forest")
+  varImpPlot(m2_rf, main ='Feature Importance')
+  pred_rf <- predict(m2_rf, test)
+  plot(test$selling_price,pred_rf, main="Scatterplot of Random Forest", col = c("red","blue"), xlab = "Actual Selling Price", ylab = "Predicted Selling Price")
+  
+  rmse_rf <- RMSE(pred_rf, test$selling_price)
+  rsquare_rf <- R2(pred_rf, test$selling_price)
+  rmse_rf
+  rsquare_rf
   #Ridge regression
   #define response variable
   y <- test$selling_price
@@ -161,8 +179,12 @@
   coef(best_model)  
   #produce Ridge trace plot
   plot(ridge_md, xvar = "lambda")
+  plot(best_model)
   #use fitted best model to make predictions
   y_predicted <- predict(cv_model, s = best_lambda, newx = x)
+  
+  plot(test$selling_price,y_predicted, main="Scatterplot of Ridge model", col = c("red","blue"), 
+       xlab = "Actual Selling Price", ylab = "Predicted Selling Price")
   
   #find SST and SSE
   sst <- sum((y - mean(y))^2)
@@ -196,7 +218,8 @@
   
   #use lasso regression model to predict response value
   y_predicted <- predict(best_model, s = best_lambda, newx = x)
-  
+  plot(test$selling_price,y_predicted, main="Scatterplot of Lasso model", col = c("red","blue"), 
+       xlab = "Actual Selling Price", ylab = "Predicted Selling Price")
   #find SST and SSE
   sst <- sum((y - mean(y))^2)
   sse <- sum((y_predicted - y)^2)
@@ -207,11 +230,46 @@
   rmse_lasso <- sqrt(sse/nrow(test))
   rmse_lasso
   
+  #Multiple linear regression with k-fold cross validation
+  ctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 10)
+  model_mlr <- train(selling_price ~ name + year + km_driven + seller_type + 
+                       mileage + transmission + max_power, data = car, method = "lm", trControl = ctrl)
+  print(model_mlr)
+  mode_mlr_predicted <- model_mlr %>% predict(test)
+  plot(test$selling_price,mode_mlr_predicted, main="Scatterplot of Multiple linear regression", col = c("red","blue"), 
+       xlab = "Actual Selling Price", ylab = "Predicted Selling Price")
+  
+  #Stepwise regression
+  res.lm <- lm(selling_price ~ name + year + km_driven + seller_type + 
+                 mileage + transmission + max_power, data = car)
+  step <- stepAIC(res.lm, direction = "both", trace = FALSE)
+  step
+  step.model <- train(selling_price ~ name + year + km_driven + seller_type + 
+                        mileage + transmission + max_power, data = car,
+                      method = "lmStepAIC", 
+                      trControl = train.control,
+                      trace = FALSE
+  )
+  # Model accuracy
+  step.model$results
+  # Final model coefficients
+  step.model$finalModel
+  # Summary of the model
+  summary(step.model$finalModel)
+  model_step_predicted <- step.model %>% predict(test)
+  plot(test$selling_price,model_step_predicted, main="Scatterplot of Stepwise model", col = c("red","blue"), 
+       xlab = "Actual Selling Price", ylab = "Predicted Selling Price")
+  
   print("--------- LRM ---------")
   print("R-SQUARED: ")
   print(rsquare_lrm)
   print("RMSE: ")
   print(rmse_orm)
+  print("--------- RF  ---------")
+  print("R-SQUARED: ")
+  print(rsquare_rf)
+  print("RMSE: ")
+  print(rmse_rf)
   print("---------RIDGE---------")
   print("R-SQUARED: ")
   print(rsq_ridge)
@@ -222,5 +280,6 @@
   print(rsq_lasso)
   print("RMSE: ")
   print(rmse_lasso)
+  
   
   
