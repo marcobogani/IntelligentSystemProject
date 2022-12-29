@@ -8,6 +8,8 @@
   library(randomForest)
   library(MASS)
   library(jtools)
+  library(Metrics)
+  library(GGally)
   source("regression/outliers.R")
   source("regression/reg_perf.R")
   #source("plot_config.R")
@@ -121,16 +123,22 @@
   options(scipen=999)
   ggplot(stack(car), aes(x = ind, y = values, color=ind)) + 
     geom_boxplot(alpha=0.3)
-  correlationMatrix <- cor(car)
-  #corrplot(correlationMatrix, type="full", 
-  #         method ="color", title = "Correlation Plot", 
-  #         mar=c(0,0,1,0), tl.cex= 0.8, outline= T, tl.col="indianred4")
+  correlationMatrix <- cor(subset(car, select = -c(selling_price)))
+  corrplot(correlationMatrix,method = 'square', order = 'FPC', type = 'lower', insig = "p-value",diag = FALSE)
+  head(car)
+  ggpairs(
+    car,
+    columns = c(1,2,4:12),
+    title = "Scatterplot Matrix for Mean"
+  )
   
   trainIndex <- createDataPartition(car$selling_price, p = .7,
                                     list = FALSE,
                                     times = 1)
+  
   train <- car[ trainIndex,]
   test <- car[-trainIndex,]
+  corrplot(cor(subset(train, select = -c(selling_price))),method = 'square', order = 'FPC', type = 'lower', diag = FALSE)
   m1_lr <- lm(selling_price ~ ., data = train)
   summary(m1_lr)
   m2_lr <- lm(selling_price ~ name + year + km_driven + seller_type + 
@@ -138,39 +146,56 @@
   m2_lr
   model_summ <- summary(m2_lr)
   model_summ
-  pred_lr <- m2_lr %>% predict(test)
+  pred_lr <- predict(m2_lr, newdata = test)
+  
   rmse_orm <- RMSE(pred_lr, test$selling_price)
   rsquare_lrm <- R2(pred_lr, test$selling_price)
+  rae_lrm <- rae(pred_lr, test$selling_price)
   rmse_orm
   rsquare_lrm
-  
+  rae_lrm
+  #rsquare test: 0.6967
   plot(m2_lr)
   print(test$selling_price)
   print(pred_lr)
   print(summary(m2_lr))
-  plot(test$selling_price,pred_lr, main="Scatterplot of LRM model", col = c("red","blue"), 
-       xlab = "Actual Selling Price", ylab = "Predicted Selling Price")
+  ggplot(test, aes(x=test$selling_price, y=pred_lr)) +
+    geom_smooth(method = "lm", se = FALSE, color="red") +
+    geom_point(alpha = 0.4) +
+    xlab("Actual Selling Price") +
+    ylab("Predicted Selling Price") +
+    labs(title = "Selling Price predictions using OLS") + 
+    theme(text = element_text(size = 12))
   
   #effect_plot(test$selling_price,pred_lr, interval = TRUE, plot.points = TRUE, 
    #           jitter = 0.05)
   
   #Random forest
   m2_rf <- randomForest(selling_price~.,data = train)
+  print(summary(m2_rf))
+  m2_rf
   plot(m2_rf, main="Error rate of random forest")
   varImpPlot(m2_rf, main ='Feature Importance')
   pred_rf <- predict(m2_rf, test)
-  plot(test$selling_price,pred_rf, main="Scatterplot of Random Forest", col = c("red","blue"), xlab = "Actual Selling Price", ylab = "Predicted Selling Price")
-  
+  ggplot(test, aes(x=test$selling_price, y=pred_rf)) +
+    geom_smooth(method = "lm", se = FALSE, color="red") +
+    geom_point(alpha = 0.4) +
+    xlab("Actual Selling Price") +
+    ylab("Predicted Selling Price") +
+    labs(title = "Selling Price predictions using Random Forest") + 
+    theme(text = element_text(size = 12))
   rmse_rf <- RMSE(pred_rf, test$selling_price)
   rsquare_rf <- R2(pred_rf, test$selling_price)
+  rae_rf <- rae(pred_rf, test$selling_price)
   rmse_rf
   rsquare_rf
+  rae_rf
   #Ridge regression
   #define response variable
-  y <- test$selling_price
+  y <- train$selling_price
   
   #define matrix of predictor variables
-  x <- data.matrix(test)
+  x <- data.matrix(train)
   ridge_md <- glmnet(x, y, alpha = 0)
   
   #view summary of model
@@ -186,29 +211,33 @@
   coef(best_model)  
   #produce Ridge trace plot
   plot(ridge_md, xvar = "lambda")
-  plot(best_model)
   #use fitted best model to make predictions
-  y_predicted <- predict(cv_model, s = best_lambda, newx = x)
+  y_predicted <- predict(cv_model, s = best_lambda, newx = data.matrix(test))
   
   plot(test$selling_price,y_predicted, main="Scatterplot of Ridge model", col = c("red","blue"), 
        xlab = "Actual Selling Price", ylab = "Predicted Selling Price")
   
-  #find SST and SSE
-  sst <- sum((y - mean(y))^2)
-  sse <- sum((y_predicted - y)^2)
+  ggplot(test, aes(x=test$selling_price, y=y_predicted)) +
+    geom_smooth(method = "lm", se = FALSE, color="red") +
+    geom_point(alpha = 0.4) +
+    xlab("Actual Selling Price") +
+    ylab("Predicted Selling Price") +
+    labs(title = "Selling Price predictions using Ridge model") + 
+    theme(text = element_text(size = 12))
   
-  #find R-Squared
-  rsq_ridge <- 1 - sse/sst
-  rsq_ridge  
-  rmse_ridge <- sqrt(sse/nrow(test))
+  rmse_ridge <- RMSE(y_predicted, test$selling_price)
+  r2_ridge <- R2(y_predicted, test$selling_price)
+  rae_ridge <- rae(y_predicted, test$selling_price)
   rmse_ridge
+  r2_ridge
+  rae_ridge
   
   #Lasso regression model
   #define response variable
-  y <- test$selling_price
+  y <- train$selling_price
   
   #define matrix of predictor variables
-  x <- data.matrix(test)
+  x <- data.matrix(train)
   print(x)
   #perform k-fold cross-validation to find optimal lambda value
   cv_model <- cv.glmnet(x, y, alpha = 1)
@@ -224,9 +253,14 @@
   best_model <- glmnet(x, y, alpha = 1, lambda = best_lambda)
   coef(best_model)
   #use lasso regression model to predict response value
-  y_predicted <- predict(best_model, s = best_lambda, newx = x)
-  plot(test$selling_price,y_predicted, main="Scatterplot of Lasso model", col = c("red","blue"), 
-       xlab = "Actual Selling Price", ylab = "Predicted Selling Price")
+  y_predicted <- predict(best_model, s = best_lambda, newx = data.matrix(test))
+  ggplot(test, aes(x=test$selling_price, y=y_predicted)) +
+    geom_smooth(method = "lm", se = FALSE, color="red") +
+    geom_point(alpha = 0.4) +
+    xlab("Actual Selling Price") +
+    ylab("Predicted Selling Price") +
+    labs(title = "Selling Price predictions using Lasso") + 
+    theme(text = element_text(size = 12))
   #find SST and SSE
   sst <- sum((y - mean(y))^2)
   sse <- sum((y_predicted - y)^2)
@@ -236,15 +270,20 @@
   rsq_lasso
   rmse_lasso <- sqrt(sse/nrow(test))
   rmse_lasso
-  
+  rae_lasso <- rae(y_predicted, test$selling_price)
+  rae_lasso
   #Multiple linear regression with k-fold cross validation
   ctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 10)
   model_mlr <- train(selling_price ~ name + year + km_driven + seller_type + 
                        mileage + transmission + max_power, data = car, method = "lm", trControl = ctrl)
   print(model_mlr)
   mode_mlr_predicted <- model_mlr %>% predict(test)
-  plot(test$selling_price,mode_mlr_predicted, main="Scatterplot of Multiple linear regression", col = c("red","blue"), 
-       xlab = "Actual Selling Price", ylab = "Predicted Selling Price")
+  ggplot(test, aes(x=test$selling_price, y=mode_mlr_predicted)) +
+    geom_smooth(method = "lm", se = FALSE, color="red") +
+    geom_point(alpha = 0.4) +
+    xlab("Actual Selling Price") +
+    ylab("Predicted Selling Price") +
+    theme(text = element_text(size = 12))
   
   #Stepwise regression
   res.lm <- lm(selling_price ~ name + year + km_driven + seller_type + 
@@ -254,7 +293,7 @@
   step.model <- train(selling_price ~ name + year + km_driven + seller_type + 
                         mileage + transmission + max_power, data = car,
                       method = "lmStepAIC", 
-                      trControl = train.control,
+                      trControl = ctrl,
                       trace = FALSE
   )
   # Model accuracy
@@ -264,9 +303,32 @@
   # Summary of the model
   summary(step.model$finalModel)
   model_step_predicted <- step.model %>% predict(test)
-  plot(test$selling_price,model_step_predicted, main="Scatterplot of Stepwise model", col = c("red","blue"), 
+  ggplot(test, aes(x=test$selling_price, y=model_step_predicted)) +
+    geom_smooth(method = "lm", se = FALSE, color="red") +
+    geom_point(alpha = 0.4) +
+    xlab("Actual Selling Price") +
+    ylab("Predicted Selling Price") +
+    theme(text = element_text(size = 12))
+  
+  #LMS
+  m_lms <- lqs(selling_price~name + year + km_driven + seller_type + 
+                 mileage + transmission + max_power, data=train, method = "lms")
+  pred_lms <- m_lms %>% predict(test)
+  plot(test$selling_price,pred_lms, main="Scatterplot of LMS model", col = c("red","blue"), 
        xlab = "Actual Selling Price", ylab = "Predicted Selling Price")
   
+  ggplot(test, aes(x=test$selling_price, y=pred_lms)) +
+    geom_smooth(method = "lm", se = FALSE, color="red") +
+    geom_point(alpha = 0.4) +
+    xlab("Actual Selling Price") +
+    ylab("Predicted Selling Price") +
+    theme(text = element_text(size = 12))
+  
+  
+  rmse_lms <- RMSE(pred_lms, test$selling_price)
+  rsquare_lms <- R2(pred_lms, test$selling_price)
+  rmse_lms
+  rsquare_lms
   print("--------- LRM ---------")
   print("R-SQUARED: ")
   print(rsquare_lrm)
@@ -287,6 +349,5 @@
   print(rsq_lasso)
   print("RMSE: ")
   print(rmse_lasso)
-  
-  #Least squares median regression
+  #ORM - RF - RIDGE - LASSO
   
