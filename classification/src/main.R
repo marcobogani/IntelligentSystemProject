@@ -57,7 +57,7 @@ clean_data <- FALSE
 plot_data <- TRUE
 plot_heavy <- FALSE
 plot_3d <- FALSE
-
+exclude_fault <- TRUE
 
 # Load data ============================
 
@@ -150,7 +150,8 @@ if (plot_data) {
     title = "Features correlation",
     cor(df[,-1]),
     diag = FALSE,
-    method = "square",
+    type = "upper",
+    method = "circle",
     order = "FPC",
     tl.srt = 90,
     tl.cex = 0.6,
@@ -367,6 +368,117 @@ validated_tree$prob <-
           type = "prob")
 
 
-# Support Vector Machine =================
+# Logistic Regression ====================
+if (!exclude_fault) {
+  lr_model <-
+    glm(
+      diagnosis ~ PC1 + PC2 + PC3 + PC4 + PC5 + PC6 + PC7 + PC8 + PC9 + PC10,
+      data = train_set.pca,
+      family = binomial(link = "logit")
+    )
+  summary(lr_model)
+  
+  train_set$pred <-
+    predict(lr_model, newdata = train_set.pca)
+  
+  test_set$pred <-
+    predict(lr_model, newdata = test_set.pca)
+  
+  confusionMatrix(
+    data = test_set$pred,
+    reference = test_set.pca$diagnosis,
+    positive = "M"
+  )
+}
 
-# TODO: AMOGUS
+
+# K-NN ===================================
+
+# Find K that minimize error
+kmax <- 30
+test_error <- numeric(kmax)
+for (k in 1:kmax) {
+  knn_pred <-
+    as.factor(
+      knn3Train(
+        train_set.pca[,-1],
+        test_set.pca[,-1],
+        train_set.pca[, 1],
+        k = k,
+        prob = FALSE,
+        use.all = FALSE
+      )
+    )
+  cm <-
+    confusionMatrix(data = knn_pred,
+                    reference = test_set.pca[, 1],
+                    positive = "M")
+  
+  test_error[k] <- 1 - cm$overall[1]
+}
+
+k_min <- which.min(test_error)
+knn_pred <-
+  as.factor(
+    knn3Train(
+      train_set.pca[,-1],
+      test_set.pca[,-1],
+      train_set.pca[, 1],
+      k = k_min,
+      prob = FALSE,
+      use.all = FALSE
+    )
+  )
+
+# Cross Validation
+trControl <- trainControl(method  = "cv",
+                          number  = 5)
+fit <- train(
+  diagnosis ~ PC1 + PC2 + PC3 + PC4 + PC5 + PC6 + PC7 + PC8 + PC9 + PC10,
+  method     = "knn",
+  tuneGrid   = expand.grid(k = 1:kmax),
+  trControl  = trControl,
+  metric     = "Accuracy",
+  data       = train_set.pca
+)
+
+# Test ==================================
+print("========== K-NN (test) ==========")
+cm <-
+  confusionMatrix(data = knn_pred,
+                  reference = test_set.pca[, 1],
+                  positive = "M")
+show(cm)
+
+test_set$pred <-
+  predict(fit, newdata = test_set.pca)
+
+print("======= K-NN (test - cv) =======")
+show(
+  confusionMatrix(
+    data = test_set$pred,
+    reference = test_set.pca$diagnosis,
+    positive = "M"
+  )
+)
+
+# Plot K-NN ==============================
+
+if (plot_data) {
+  ggp <-
+    ggplot(data.frame(test_error), aes(x = 1:kmax, y = test_error)) +
+    geom_line(colour = "blue") +
+    geom_point(colour = "blue") +
+    xlab("K value") + ylab("Test error") +
+    ggtitle(paste0(
+      "Optimal K value = ",
+      k_min,
+      " (min error = ",
+      format((1 - cm$overall[1]) * 100, digits = 4),
+      "%)"
+    ))
+  print(ggp)
+  
+  # Cross Validation
+  show(plot(fit))
+}
