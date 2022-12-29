@@ -7,6 +7,7 @@
   library(glmnet)
   library(randomForest)
   library(MASS)
+  library(jtools)
   source("regression/outliers.R")
   source("regression/reg_perf.R")
   #source("plot_config.R")
@@ -144,8 +145,14 @@
   rsquare_lrm
   
   plot(m2_lr)
+  print(test$selling_price)
+  print(pred_lr)
+  print(summary(m2_lr))
   plot(test$selling_price,pred_lr, main="Scatterplot of LRM model", col = c("red","blue"), 
        xlab = "Actual Selling Price", ylab = "Predicted Selling Price")
+  
+  #effect_plot(test$selling_price,pred_lr, interval = TRUE, plot.points = TRUE, 
+   #           jitter = 0.05)
   
   #Random forest
   m2_rf <- randomForest(selling_price~.,data = train)
@@ -163,7 +170,7 @@
   y <- test$selling_price
   
   #define matrix of predictor variables
-  x <- data.matrix(test[, c('name', 'year', 'km_driven', 'seller_type',"mileage","transmission","max_power")])
+  x <- data.matrix(test)
   ridge_md <- glmnet(x, y, alpha = 0)
   
   #view summary of model
@@ -201,7 +208,8 @@
   y <- test$selling_price
   
   #define matrix of predictor variables
-  x <- data.matrix(test[, c('name', 'year', 'km_driven', 'seller_type',"mileage","transmission","max_power")])
+  x <- data.matrix(test)
+  print(x)
   #perform k-fold cross-validation to find optimal lambda value
   cv_model <- cv.glmnet(x, y, alpha = 1)
   
@@ -215,7 +223,6 @@
   #find coefficients of best model
   best_model <- glmnet(x, y, alpha = 1, lambda = best_lambda)
   coef(best_model)
-  
   #use lasso regression model to predict response value
   y_predicted <- predict(best_model, s = best_lambda, newx = x)
   plot(test$selling_price,y_predicted, main="Scatterplot of Lasso model", col = c("red","blue"), 
@@ -281,5 +288,5 @@
   print("RMSE: ")
   print(rmse_lasso)
   
-  
+  #Least squares median regression
   
