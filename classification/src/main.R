@@ -481,4 +481,26 @@ if (plot_data) {
   
   # Cross Validation
   show(plot(fit))
+  
+  # ROC
+  probs <-
+    predict(fit, newdata = test_set.pca, type = "prob")[, 1]
+  pROC_obj <- roc(
+    response = (test_set.pca$diagnosis == "M"),
+    predictor = probs,
+    smoothed = TRUE,
+    ci = TRUE,
+    ci.alpha = 0.9,
+    stratified = FALSE,
+    plot = TRUE,
+    auc.polygon = TRUE,
+    max.auc.polygon = TRUE,
+    grid = TRUE,
+    print.auc = TRUE,
+    show.thres = TRUE,
+    legacy.axes = TRUE
+  )
+  sens.ci <- ci.se(pROC_obj)
+  plot(sens.ci, type = "shape", col = "lightblue")
+  plot(sens.ci, type = "bars")
 }
