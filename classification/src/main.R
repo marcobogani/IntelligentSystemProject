@@ -64,18 +64,17 @@ plot_3d <- FALSE
 df <- read.table("data/raw/data.csv", header = T, sep = ",")
 
 df$diagnosis <- as.factor(df$diagnosis)
-df$data <- df[,-1]
-df.features <- df[, c(3:32)]
+df <- df[, -1]
 
 if (plot_data) {
-  boxplotF("Features", df.features)
+  boxplotF("Features", df[,-1])
 }
 
 
 # Data analisys ========================
 
 if (plot_data) {
-  analisys <- df$data %>%
+  analisys <- df %>%
     group_by(diagnosis) %>% # Variable to be transformed
     count() %>%
     ungroup() %>%
@@ -106,7 +105,7 @@ if (plot_data) {
   if (plot_heavy) {
     # Mean group
     ggpairs(
-      df$data,
+      df,
       columns = 2:11,
       mapping = aes(color = as.factor(df$diagnosis)),
       upper = list(continuous = wrap("cor", size = 6)),
@@ -115,7 +114,7 @@ if (plot_data) {
     
     # Se group
     ggpairs(
-      df$data,
+      df,
       columns = 12:21,
       mapping = aes(color = as.factor(df$diagnosis)),
       upper = list(continuous = wrap("cor", size = 6)),
@@ -124,7 +123,7 @@ if (plot_data) {
     
     # Worst group
     ggpairs(
-      df$data,
+      df,
       columns = 22:31,
       mapping = aes(color = as.factor(df$diagnosis)),
       upper = list(continuous = wrap("cor", size = 6)),
@@ -138,9 +137,9 @@ if (plot_data) {
 
 if (clean_data) {
   for (i in c("area_worst", "area_mean", "area_se", "perimeter_worst")) {
-    df$data = remove_outliers(df$data, i)
+    df = remove_outliers(df, i)
   }
-  boxplotF("No Outliers", df$data[,-1])
+  boxplotF("No Outliers", df[, -1])
 }
 
 
@@ -149,7 +148,7 @@ if (clean_data) {
 if (plot_data) {
   corrplot(
     title = "Features correlation",
-    cor(df$data[, -1]),
+    cor(df[,-1]),
     diag = FALSE,
     method = "square",
     order = "FPC",
@@ -163,18 +162,18 @@ if (plot_data) {
 
 sample <-
   sample(c(TRUE, FALSE),
-         nrow(df$data),
+         nrow(df),
          replace = TRUE,
          prob = c(0.8, 0.2))
-train_set <- df$data[sample,]
-test_set <- df$data[!sample,]
+train_set <- df[sample, ]
+test_set <- df[!sample, ]
 
 
 # Feature selection =====================
 
-pr_comp <- prcomp(train_set[, -1], scale = TRUE, center = TRUE)
+train_set.pc <- prcomp(train_set[,-1], scale = TRUE, center = TRUE)
 
-std_dev <- pr_comp$sdev
+std_dev <- train_set.pc$sdev
 pr_var <- std_dev ^ 2
 prop_varex <- pr_var / sum(pr_var)
 sum(prop_varex[1:10])
@@ -182,21 +181,26 @@ sum(prop_varex[1:10])
 # So by using PCA, the dimensions are reduces from 30 to 10.
 
 # New training set with 10 principal components
-train_set$pca <-
-  data.frame(diagnosis = train_set$diagnosis, pr_comp$x) [, 1:11]
+train_set.pca <-
+  data.frame(diagnosis = train_set$diagnosis, train_set.pc$x) [, 1:11]
+
+# Test set
+test_set.pc <- prcomp(test_set[,-1], scale = TRUE, center = TRUE)
+test_set.pca <-
+  data.frame(diagnosis = test_set$diagnosis, test_set.pc$x) [, 1:11]
 
 
 # Plot results --------------------------
 if (plot_data) {
   ## Corr plot
   show(ggcorr(
-    cbind(train_set[, -1], pr_comp$x[, c(1:10)]),
+    cbind(train_set[,-1], train_set.pc$x[, c(1:10)]),
     label = TRUE,
     cex = 2.5
   ))
   
   ## Scree plot
-  plot(pr_comp, type = "lines", main = "Scree plot (PCA-prcomp)")
+  plot(train_set.pc, type = "lines", main = "Scree plot (PCA-prcomp)")
   title(xlab = "PC")
   
   ## Cumulative Proportion of Variance Explained
@@ -210,7 +214,7 @@ if (plot_data) {
   
   ## Scatter plot (PC1, PC2)
   show(ggplot(
-    as.data.frame(pr_comp$x),
+    as.data.frame(train_set.pc$x),
     aes(
       x = PC1,
       y = PC2,
@@ -219,19 +223,19 @@ if (plot_data) {
   ) + geom_point(alpha = 0.5))
   
   ## Biplot (PC1, PC2)
-  biplot(pr_comp,
+  biplot(train_set.pc,
          cex = c(.7, .7),
          col = c("gray", "red"))
   
   ## 3D scatter plot (PC1, PC2, PC3)
-  scatterplot3d(pr_comp$x[, 1:3],
+  scatterplot3d(train_set.pc$x[, 1:3],
                 pch = 16,
                 color = as.numeric(train_set$diagnosis))
 }
 
 if (plot_3d) {
   plot3d(
-    pr_comp$x[, 1:3],
+    train_set.pc$x[, 1:3],
     col = as.integer(train_set$diagnosis),
     type = "s",
     size = 0.5
@@ -244,7 +248,7 @@ if (plot_3d) {
 
 model_tree <-
   rpart(diagnosis ~ .,
-        data = train_set$pca,
+        data = train_set.pca,
         method = "class")
 
 
@@ -262,6 +266,7 @@ if (plot_data) {
 model_prune <- prune(model_tree, cp = optimal.complexity)
 
 if (plot_data) {
+  # Initial model
   show(rpart.plot(
     model_tree,
     type = 1,
@@ -269,6 +274,8 @@ if (plot_data) {
     box.palette = "-RdYlGn",
     branch.lty = 2
   ))
+  
+  # Pruned model
   show(rpart.plot(
     model_prune,
     type = 1,
@@ -279,61 +286,33 @@ if (plot_data) {
 }
 
 train_set$pred <-
-  predict(model_prune, newdata = train_set$pca, type = "class")
+  predict(model_prune, newdata = train_set.pca, type = "class")
 
 print("=== CLASSIFICATION TREE (train) ===")
 show(
   confusionMatrix(
     data = train_set$pred,
-    reference = train_set$pca$diagnosis,
+    reference = train_set.pca$diagnosis,
     positive = "M"
   )
 )
 
 
 # Test ==================================
-test_prcomp <- prcomp(test_set[, -1], scale = TRUE, center = TRUE)
-test_set$pca <-
-  data.frame(diagnosis = test_set$diagnosis, test_prcomp$x) [, 1:11]
-
-
 test_set$pred <-
-  predict(model_prune, newdata = test_set$pca, type = "class")
+  predict(model_prune, newdata = test_set.pca, type = "class")
 
 print("=== CLASSIFICATION TREE (test) ===")
 show(
   confusionMatrix(
     data = test_set$pred,
-    reference = test_set$pca$diagnosis,
+    reference = test_set.pca$diagnosis,
     positive = "M"
   )
 )
 
-probs <-
-  predict(model_prune, newdata = test_set$pca, type = "prob")[, 1]
 
-# ROC
-if (plot_data) {
-  show(
-    roc(
-      response = (test_set$pca$diagnosis == "M"),
-      predictor = probs,
-      auc = TRUE,
-      ci = TRUE,
-      plot = TRUE,
-      main = "Curva ROC",
-      legacy.axes = TRUE
-    )
-  )
-}
-
-
-# K-fold Cross Validation ================
-
-pr_comp <- prcomp(df$data[, -1], scale = TRUE, center = TRUE)
-df$pca <-
-  data.frame(diagnosis = df$data$diagnosis, pr_comp$x) [, 1:11]
-
+# K-fold Cross Validation (rpart) ========
 
 # Create a trainControl object to control how the train function creates the model
 train_control <-
@@ -348,7 +327,7 @@ tune_grid = expand.grid(cp = c(0.001))
 validated_tree <-
   train(
     diagnosis ~ PC1 + PC2 + PC3 + PC4 + PC5 + PC6 + PC7 + PC8 + PC9 + PC10,
-    data = df$pca,
+    data = train_set.pca,
     # Data set
     method = "rpart",
     # Model type(decision tree)
@@ -370,19 +349,24 @@ show(
 
 validated_tree$pred <-
   predict(validated_tree$finalModel,
-          newdata = test_set$pca,
+          newdata = test_set.pca,
           type = "class")
 print("=== CLASSIFICATION TREE (k-fold) ===")
 
 show(
   confusionMatrix(
     data = validated_tree$pred,
-    reference = test_set$pca$diagnosis,
+    reference = test_set.pca$diagnosis,
     positive = "M"
   )
 )
 
 validated_tree$prob <-
   predict(validated_tree$finalModel,
-          newdata = test_set$pca,
+          newdata = test_set.pca,
           type = "prob")
+
+
+# Support Vector Machine =================
+
+# TODO: AMOGUS
