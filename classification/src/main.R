@@ -294,6 +294,7 @@ show(
   confusionMatrix(
     data = train_set$pred,
     reference = train_set.pca$diagnosis,
+    mode = "everything",
     positive = "M"
   )
 )
@@ -308,6 +309,7 @@ show(
   confusionMatrix(
     data = test_set$pred,
     reference = test_set.pca$diagnosis,
+    mode = "everything",
     positive = "M"
   )
 )
@@ -358,6 +360,7 @@ show(
   confusionMatrix(
     data = validated_tree$pred,
     reference = test_set.pca$diagnosis,
+    mode = "everything",
     positive = "M"
   )
 )
@@ -387,6 +390,7 @@ if (!exclude_fault) {
   confusionMatrix(
     data = test_set$pred,
     reference = test_set.pca$diagnosis,
+    mode = "everything",
     positive = "M"
   )
 }
@@ -412,6 +416,7 @@ for (k in 1:kmax) {
   cm <-
     confusionMatrix(data = knn_pred,
                     reference = test_set.pca[, 1],
+                    mode = "everything",
                     positive = "M")
   
   test_error[k] <- 1 - cm$overall[1]
@@ -447,6 +452,7 @@ print("========== K-NN (test) ==========")
 cm <-
   confusionMatrix(data = knn_pred,
                   reference = test_set.pca[, 1],
+                  mode = "everything",
                   positive = "M")
 show(cm)
 
@@ -458,6 +464,7 @@ show(
   confusionMatrix(
     data = test_set$pred,
     reference = test_set.pca$diagnosis,
+    mode = "everything",
     positive = "M"
   )
 )
@@ -504,3 +511,41 @@ if (plot_data) {
   plot(sens.ci, type = "shape", col = "lightblue")
   plot(sens.ci, type = "bars")
 }
+
+
+# Random Forest ==========================
+
+trControl <-
+  trainControl(
+    method = "cv",
+    number = 5,
+    summaryFunction = twoClassSummary,
+    savePredictions = TRUE,
+    classProbs = TRUE,
+    sampling = "up"
+  )
+rforest <-
+  train(
+    diagnosis ~ PC1 + PC2 + PC3 + PC4 + PC5 + PC6 + PC7 + PC8 + PC9 + PC10,
+    data = train_set.pca,
+    method = "rf",
+    trControl = trControl,
+    metric = "Sens",
+    ntree = 500,
+    cutoff = c(.73, 1 - .73)
+  )
+
+rforest
+
+test_set$pred <- predict(rforest, test_set.pca, na.action = na.pass)
+cm_rf <- confusionMatrix(
+  data = test_set$pred,
+  reference = test_set.pca$diagnosis,
+  mode = "everything",
+  positive = "M"
+)
+
+cm_rf
+
+
+
