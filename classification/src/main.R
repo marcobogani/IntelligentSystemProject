@@ -39,6 +39,7 @@ library(caret)
 library(ISLR)
 library(pROC)
 library(rgl)
+require(randomForest)
 
 ## ---------------------------
 
@@ -514,7 +515,6 @@ if (plot_data) {
 
 
 # Random Forest ==========================
-
 trControl <-
   trainControl(
     method = "cv",
@@ -532,12 +532,13 @@ rforest <-
     trControl = trControl,
     metric = "Sens",
     ntree = 500,
-    cutoff = c(.73, 1 - .73)
+    cutoff = c(.75, 1 - .75)
   )
 
 rforest
-
+print("========== RF (test) ==========")
 test_set$pred <- predict(rforest, test_set.pca, na.action = na.pass)
+
 cm_rf <- confusionMatrix(
   data = test_set$pred,
   reference = test_set.pca$diagnosis,
@@ -545,7 +546,7 @@ cm_rf <- confusionMatrix(
   positive = "M"
 )
 
-cm_rf
+show(cm_rf)
 
 
 
