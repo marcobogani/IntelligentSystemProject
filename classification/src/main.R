@@ -52,8 +52,10 @@ source("src/outliers.R")
 
 # Set variables ========================
 
-# set.seed(10)
+set.seed(425)
+#set.seed(142)
 set.seed(451)
+
 clean_data <- FALSE
 plot_data <- TRUE
 plot_heavy <- FALSE
@@ -66,6 +68,7 @@ df <- read.table("data/raw/data.csv", header = T, sep = ",")
 
 df$diagnosis <- as.factor(df$diagnosis)
 df <- df[, -1]
+dia <-df$diagnosis
 
 if (plot_data) {
   boxplotF("Features", df[,-1])
@@ -143,12 +146,9 @@ if (clean_data) {
   boxplotF("No Outliers", df[, -1])
 }
 
-
-# Plot corrplot ========================
 # Correlation between features
 if (plot_data) {
   corrplot(
-    title = "Features correlation",
     cor(df[,-1]),
     diag = FALSE,
     type = "upper",
@@ -158,6 +158,10 @@ if (plot_data) {
     tl.cex = 0.6,
   )
 }
+corMatMy <- cor(df[,2:31])
+highlyCor <- colnames(df)[findCorrelation(corMatMy, cutoff = 0.85, verbose = TRUE)]
+df <- df[, which(!colnames(df) %in% highlyCor)]
+df <- cbind(diagnosis = dia, df)
 
 
 # Data set split ========================
@@ -178,25 +182,25 @@ train_set.pc <- prcomp(train_set[,-1], scale = TRUE, center = TRUE)
 std_dev <- train_set.pc$sdev
 pr_var <- std_dev ^ 2
 prop_varex <- pr_var / sum(pr_var)
-sum(prop_varex[1:10])
-# 10 Principal Components explain about 95.4 % of total variance.
-# So by using PCA, the dimensions are reduces from 30 to 10.
+sum(prop_varex[1:8])
+# 10 Principal Components explain about 95.6 % of total variance.
+# So by using PCA, the dimensions are reduces from 30(circa) to 8:
 
 # New training set with 10 principal components
 train_set.pca <-
-  data.frame(diagnosis = train_set$diagnosis, train_set.pc$x) [, 1:11]
+  data.frame(diagnosis = train_set$diagnosis, train_set.pc$x) [, 1:9]
 
 # Test set
 test_set.pc <- prcomp(test_set[,-1], scale = TRUE, center = TRUE)
 test_set.pca <-
-  data.frame(diagnosis = test_set$diagnosis, test_set.pc$x) [, 1:11]
+  data.frame(diagnosis = test_set$diagnosis, test_set.pc$x) [, 1:9]
 
 
 # Plot results --------------------------
 if (plot_data) {
   ## Corr plot
   show(ggcorr(
-    cbind(train_set[,-1], train_set.pc$x[, c(1:10)]),
+    cbind(train_set[,-1], train_set.pc$x[, c(1:8)]),
     label = TRUE,
     cex = 2.5
   ))
@@ -210,9 +214,9 @@ if (plot_data) {
        xlab = "Principal Component",
        ylab = "Cumulative Proportion of Variance Explained",
        type = "b")
-  abline(h = sum(prop_varex[1:10]),
+  abline(h = sum(prop_varex[1:8]),
          col = 'red',
-         v = 10)
+         v = 8)
   
   ## Scatter plot (PC1, PC2)
   show(ggplot(
@@ -330,7 +334,7 @@ tune_grid = expand.grid(cp = c(0.001))
 # Use the train() function to create the model
 validated_tree <-
   train(
-    diagnosis ~ PC1 + PC2 + PC3 + PC4 + PC5 + PC6 + PC7 + PC8 + PC9 + PC10,
+    diagnosis ~ .,
     data = train_set.pca,
     # Data set
     method = "rpart",
@@ -376,7 +380,7 @@ validated_tree$prob <-
 if (!exclude_fault) {
   lr_model <-
     glm(
-      diagnosis ~ PC1 + PC2 + PC3 + PC4 + PC5 + PC6 + PC7 + PC8 + PC9 + PC10,
+      diagnosis ~ .,
       data = train_set.pca,
       family = binomial(link = "logit")
     )
@@ -440,7 +444,7 @@ knn_pred <-
 trControl <- trainControl(method  = "cv",
                           number  = 5)
 fit <- train(
-  diagnosis ~ PC1 + PC2 + PC3 + PC4 + PC5 + PC6 + PC7 + PC8 + PC9 + PC10,
+  diagnosis ~ .,
   method     = "knn",
   tuneGrid   = expand.grid(k = 1:kmax),
   trControl  = trControl,
@@ -526,13 +530,13 @@ trControl <-
   )
 rforest <-
   train(
-    diagnosis ~ PC1 + PC2 + PC3 + PC4 + PC5 + PC6 + PC7 + PC8 + PC9 + PC10,
+    diagnosis ~ .,
     data = train_set.pca,
     method = "rf",
     trControl = trControl,
     metric = "Sens",
-    ntree = 500,
-    cutoff = c(.75, 1 - .75)
+    ntree = 1000,
+    cutoff = c(.50, 1 - .75)
   )
 
 rforest

@@ -1,0 +1,163 @@
+"=== CLASSIFICATION TREE (test) ==="
+Confusion Matrix and Statistics
+
+          Reference
+Prediction  B  M
+         B 61  4
+         M  7 31
+                                          
+               Accuracy : 0.8932          
+                 95% CI : (0.8169, 0.9455)
+    No Information Rate : 0.6602          
+    P-Value [Acc > NIR] : 4.602e-08       
+                                          
+                  Kappa : 0.7668          
+                                          
+ Mcnemar's Test P-Value : 0.5465          
+                                          
+            Sensitivity : 0.8857          
+            Specificity : 0.8971          
+         Pos Pred Value : 0.8158          
+         Neg Pred Value : 0.9385          
+              Precision : 0.8158          
+                 Recall : 0.8857          
+                     F1 : 0.8493          
+             Prevalence : 0.3398          
+         Detection Rate : 0.3010          
+   Detection Prevalence : 0.3689          
+      Balanced Accuracy : 0.8914          
+                                          
+       'Positive' Class : M    
+
+--------------------------------------------------------------------
+
+"=== CLASSIFICATION TREE (k-fold) ==="
+Confusion Matrix and Statistics
+
+          Reference
+Prediction  B  M
+         B 65  4
+         M  3 31
+                                         
+               Accuracy : 0.932          
+                 95% CI : (0.865, 0.9722)
+    No Information Rate : 0.6602         
+    P-Value [Acc > NIR] : 5.862e-11      
+                                         
+                  Kappa : 0.8475         
+                                         
+ Mcnemar's Test P-Value : 1              
+                                         
+            Sensitivity : 0.8857         
+            Specificity : 0.9559         
+         Pos Pred Value : 0.9118         
+         Neg Pred Value : 0.9420         
+              Precision : 0.9118         
+                 Recall : 0.8857         
+                     F1 : 0.8986         
+             Prevalence : 0.3398         
+         Detection Rate : 0.3010         
+   Detection Prevalence : 0.3301         
+      Balanced Accuracy : 0.9208         
+                                         
+       'Positive' Class : M
+
+
+--------------------------------------------------------------------
+
+"========== K-NN (test) =========="
+Confusion Matrix and Statistics
+
+          Reference
+Prediction  B  M
+         B 65  5
+         M  3 30
+                                          
+               Accuracy : 0.9223          
+                 95% CI : (0.8527, 0.9659)
+    No Information Rate : 0.6602          
+    P-Value [Acc > NIR] : 3.711e-10       
+                                          
+                  Kappa : 0.8245          
+                                          
+ Mcnemar's Test P-Value : 0.7237          
+                                          
+            Sensitivity : 0.8571          
+            Specificity : 0.9559          
+         Pos Pred Value : 0.9091          
+         Neg Pred Value : 0.9286          
+              Precision : 0.9091          
+                 Recall : 0.8571          
+                     F1 : 0.8824          
+             Prevalence : 0.3398          
+         Detection Rate : 0.2913          
+   Detection Prevalence : 0.3204          
+      Balanced Accuracy : 0.9065          
+                                          
+       'Positive' Class : M             
+
+------------------------------------------------------------------------
+                                          
+[1] "======= K-NN (test - cv) ======="
+Confusion Matrix and Statistics
+
+          Reference
+Prediction  B  M
+         B 63  6
+         M  5 29
+                                          
+               Accuracy : 0.8932          
+                 95% CI : (0.8169, 0.9455)
+    No Information Rate : 0.6602          
+    P-Value [Acc > NIR] : 4.602e-08       
+                                          
+                  Kappa : 0.7603          
+                                          
+ Mcnemar's Test P-Value : 1               
+                                          
+            Sensitivity : 0.8286          
+            Specificity : 0.9265          
+         Pos Pred Value : 0.8529          
+         Neg Pred Value : 0.9130          
+              Precision : 0.8529          
+                 Recall : 0.8286          
+                     F1 : 0.8406          
+             Prevalence : 0.3398          
+         Detection Rate : 0.2816          
+   Detection Prevalence : 0.3301          
+      Balanced Accuracy : 0.8775          
+                                          
+       'Positive' Class : M 
+
+-------------------------------------------------------------------
+
+"========== RF (test) =========="
+Confusion Matrix and Statistics
+
+          Reference
+Prediction  B  M
+         B 60  4
+         M  8 31
+                                          
+               Accuracy : 0.8835          
+                 95% CI : (0.8053, 0.9383)
+    No Information Rate : 0.6602          
+    P-Value [Acc > NIR] : 1.871e-07       
+                                          
+                  Kappa : 0.7473          
+                                          
+ Mcnemar's Test P-Value : 0.3865          
+                                          
+            Sensitivity : 0.8857          
+            Specificity : 0.8824          
+         Pos Pred Value : 0.7949          
+         Neg Pred Value : 0.9375          
+              Precision : 0.7949          
+                 Recall : 0.8857          
+                     F1 : 0.8378          
+             Prevalence : 0.3398          
+         Detection Rate : 0.3010          
+   Detection Prevalence : 0.3786          
+      Balanced Accuracy : 0.8840          
+                                          
+       'Positive' Class : M
