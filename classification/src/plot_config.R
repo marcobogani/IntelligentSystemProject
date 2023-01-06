@@ -16,7 +16,7 @@ boxplotF <- function (title, data) {
   )
   
   ## Draw boxplot with no axes.
-  boxplot(data, main = title, xaxt = "n", yaxt = "n")
+  boxplot(data, xaxt = "n", yaxt = "n")
   
   ## Draw x-axis without labels.
   axis(side = 1, labels = FALSE)

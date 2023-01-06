@@ -68,7 +68,6 @@ df <- read.table("data/raw/data.csv", header = T, sep = ",")
 
 df$diagnosis <- as.factor(df$diagnosis)
 df <- df[, -1]
-dia <-df$diagnosis
 
 if (plot_data) {
   boxplotF("Features", df[,-1])
@@ -137,16 +136,9 @@ if (plot_data) {
 }
 
 
-# Clean data ===========================
 
-if (clean_data) {
-  for (i in c("area_worst", "area_mean", "area_se", "perimeter_worst")) {
-    df = remove_outliers(df, i)
-  }
-  boxplotF("No Outliers", df[, -1])
-}
 
-# Correlation between features
+# Correlation between features ===========
 if (plot_data) {
   corrplot(
     cor(df[,-1]),
@@ -158,13 +150,14 @@ if (plot_data) {
     tl.cex = 0.6,
   )
 }
+dia <-df$diagnosis
 corMatMy <- cor(df[,2:31])
 highlyCor <- colnames(df)[findCorrelation(corMatMy, cutoff = 0.85, verbose = TRUE)]
 df <- df[, which(!colnames(df) %in% highlyCor)]
 df <- cbind(diagnosis = dia, df)
 
 
-# Data set split ========================
+# Data set split =========================
 
 sample <-
   sample(c(TRUE, FALSE),
@@ -173,6 +166,16 @@ sample <-
          prob = c(0.8, 0.2))
 train_set <- df[sample, ]
 test_set <- df[!sample, ]
+
+
+# Clean data =============================
+
+if (clean_data) {
+  for (i in c("area_worst", "area_mean", "area_se")) {
+    train_set = remove_outliers(train_set, i)
+  }
+  boxplotF("No Outliers", df[, -1])
+}
 
 
 # Feature selection =====================
@@ -424,10 +427,10 @@ for (k in 1:kmax) {
                     mode = "everything",
                     positive = "M")
   
-  test_error[k] <- 1 - cm$overall[1]
+  test_error[k] <- cm$overall[1]
 }
 
-k_min <- which.min(test_error)
+k_min <- which.max(test_error)
 knn_pred <-
   as.factor(
     knn3Train(
@@ -479,14 +482,14 @@ show(
 if (plot_data) {
   ggp <-
     ggplot(data.frame(test_error), aes(x = 1:kmax, y = test_error)) +
-    geom_line(colour = "blue") +
-    geom_point(colour = "blue") +
-    xlab("K value") + ylab("Test error") +
+    geom_line(colour = "black") +
+    geom_point(colour = "black") +
+    xlab("K value") + ylab("Accuracy") +
     ggtitle(paste0(
       "Optimal K value = ",
       k_min,
-      " (min error = ",
-      format((1 - cm$overall[1]) * 100, digits = 4),
+      " (accuracy = ",
+      format((cm$overall[1]) * 100, digits = 4),
       "%)"
     ))
   print(ggp)
@@ -535,7 +538,7 @@ rforest <-
     method = "rf",
     trControl = trControl,
     metric = "Sens",
-    ntree = 1000,
+    ntree = 600,
     cutoff = c(.50, 1 - .75)
   )
 
@@ -552,5 +555,5 @@ cm_rf <- confusionMatrix(
 
 show(cm_rf)
 
-
+plot(rforest$finalModel[], main="Error rate of random forest")
 
